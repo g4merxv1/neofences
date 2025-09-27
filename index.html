@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Projeto: Login + Mapa (Leaflet)</title>
+  <!-- Leaflet CSS (CDN) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"/>
+  <style>
+    :root{ --accent: #007bff; }
+    html,body,#app{ height:100%; margin:0; font-family: Inter, Arial, sans-serif; }
+    /* map full-screen behind everything */
+    #map{ position:fixed; inset:0; z-index:0; }
+
+    /* overlay content (login, menu) */
+    .overlay{ position:relative; z-index:10; }
+
+    /* centered login modal */
+    .login-wrapper{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background: rgba(0,0,0,0.35); }
+    .login-card{ width:340px; background:#fff; padding:20px; border-radius:10px; box-shadow: 0 8px 30px rgba(0,0,0,0.18); }
+    .login-card h2{ margin:0 0 10px; font-size:20px;color:#222; }
+    .form-group{ margin-bottom:12px; }
+    label{ display:block; font-size:13px; color:#444; margin-bottom:6px; }
+    input[type="text"], input[type="password"]{ width:100%; padding:10px; border:1px solid #e0e0e0; border-radius:8px; font-size:14px; box-sizing:border-box; }
+    button.primary{ width:100%; padding:10px 12px; border:none; background:var(--accent); color:#fff; border-radius:8px; font-weight:600; cursor:pointer; }
+    .muted{ font-size:12px; color:#666; margin-top:8px; }
+
+    /* top-left menu */
+    .nav{ position:fixed; top:16px; left:16px; z-index:20; display:flex; gap:8px; align-items:center; background: rgba(255,255,255,0.92); padding:8px 10px; border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,0.12); }
+    .nav .title{ font-weight:700; margin-right:6px; }
+    .nav button{ border:1px solid transparent; border-radius:8px; padding:6px 10px; background:transparent; cursor:pointer; }
+    .nav button.logout{ background:#d9534f; color:white; border:none; }
+
+    /* small content card */
+    #content{ position:fixed; bottom:20px; left:20px; z-index:15; background: rgba(255,255,255,0.95); padding:12px 16px; border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,0.12); max-width:360px; }
+
+    @media (max-width:480px){
+      .login-card{ width:92%; }
+      .nav{ left:8px; right:8px; justify-content:space-between; }
+      #content{ left:10px; right:10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- MAP (Leaflet) -->
+  <div id="map" aria-hidden="true"></div>
+
+  <div class="overlay">
+
+    <!-- Login modal -->
+    <div id="login" class="login-wrapper" role="dialog" aria-labelledby="loginTitle">
+      <div class="login-card">
+        <h2 id="loginTitle">Entrar no Projeto</h2>
+        <div class="form-group">
+          <label for="user">Usuário</label>
+          <input id="user" type="text" autocomplete="username" placeholder="seu usuário">
+        </div>
+        <div class="form-group">
+          <label for="pass">Senha</label>
+          <input id="pass" type="password" autocomplete="current-password" placeholder="sua senha">
+        </div>
+        <button id="btnLogin" class="primary">Entrar</button>
+        <p class="muted">Exemplo: usuário <strong>demo</strong> / senha <strong>demo</strong> — apenas para teste.</p>
+      </div>
+    </div>
+
+    <!-- Navigation / Menu (hidden until login) -->
+    <nav id="mainNav" class="nav" style="display:none;">
+      <div class="title">Meu Projeto</div>
+      <button id="btnHome">Início</button>
+      <button id="btnLayers">Camadas</button>
+      <button id="btnLogout" class="logout">Sair</button>
+    </nav>
+
+    <!-- Small content card -->
+    <div id="content" style="display:none;">
+      <h3>Bem-vindo(a)!</h3>
+      <p>Menu principal — o mapa está ao fundo. Use os botões para explorar.</p>
+    </div>
+
+  </div>
+
+  <!-- Leaflet JS (CDN) -->
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <script>
+    // =============================
+    // Demo auth (client-side) — NÃO use em produção
+    // =============================
+    const DEMO_USER = 'demo';
+    const DEMO_PASS = 'demo';
+
+    const loginWrapper = document.getElementById('login');
+    const mainNav = document.getElementById('mainNav');
+    const content = document.getElementById('content');
+
+    function showMain(){
+      loginWrapper.style.display = 'none';
+      mainNav.style.display = 'flex';
+      content.style.display = 'block';
+      localStorage.setItem('logged','true');
+      // ensure map resizes properly after being shown
+      setTimeout(()=> map.invalidateSize(), 200);
+    }
+
+    document.getElementById('btnLogin').addEventListener('click', ()=>{
+      const u = document.getElementById('user').value.trim();
+      const p = document.getElementById('pass').value;
+      if(u === DEMO_USER && p === DEMO_PASS){
+        showMain();
+      } else {
+        alert('Usuário ou senha incorretos.');
+      }
+    });
+
+    document.getElementById('btnLogout').addEventListener('click', ()=>{
+      localStorage.removeItem('logged');
+      loginWrapper.style.display = 'flex';
+      mainNav.style.display = 'none';
+      content.style.display = 'none';
+    });
+
+    // persist login across reloads
+    if(localStorage.getItem('logged') === 'true'){
+      showMain();
+    }
+
+    // =============================
+    // Leaflet map initialization
+    // =============================
+    const map = L.map('map', { center: [-23.55052, -46.633308], zoom: 12 });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // example marker
+    L.marker([-23.55052, -46.633308]).addTo(map).bindPopup('Local de exemplo').openPopup();
+
+    // responsive behavior
+    window.addEventListener('resize', ()=> map.invalidateSize());
+
+    // simple button actions (hooks to extend)
+    document.getElementById('btnHome').addEventListener('click', ()=> map.setView([-23.55052, -46.633308], 12));
+    document.getElementById('btnLayers').addEventListener('click', ()=> alert('Aqui você pode alternar camadas (exemplo).'));
+  </script>
+</body>
+</html>
